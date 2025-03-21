@@ -407,7 +407,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startingSize: {x: 100, y: 3, z: 100}
-  roomAmount: 5
+  roomAmount: 20
 --- !u!4 &521721228
 Transform:
   m_ObjectHideFlags: 0
