@@ -7,11 +7,13 @@ public class DungeonAlgorithm : MonoBehaviour
     public Vector3 startingSize;
     private List<Transform> roomTransforms = new List<Transform>();
     private List<Vector3> roomSizes = new List<Vector3>();
-    public int roomAmount;
+    public int roomDensity;
+    private int roomAmount;
     void Start()
     {
         roomSizes.Add(startingSize);
         roomTransforms.Add(transform);
+        roomAmount = (int)((startingSize.x / 100) * (startingSize.z / 100) * roomDensity);
         StartCoroutine(RoomGeneration());
     }
 
@@ -21,69 +23,116 @@ public class DungeonAlgorithm : MonoBehaviour
         {
             if(i % 2 == 0)
             {
-                int randomRoom = 0;
-                int split = (int)Random.Range(1, roomSizes[randomRoom].x -1);
+
+                int biggestIndex = 0;
+                float biggestSize = roomSizes[0].x; // Assume first room is the biggest
+
+                for (int x = 1; x < roomSizes.Count; x++)
+                {
+                    if (roomSizes[x].x > biggestSize)
+                    {
+                        biggestSize = roomSizes[x].x;
+                        biggestIndex = x;
+                    }
+                }
+
+                int randomRoom = biggestIndex;
+
+                Vector3 roomPos = roomTransforms[randomRoom].position;
+                Vector3 roomSize = roomSizes[randomRoom];
+
+                float xMin = roomPos.x - (roomSize.x / 2);
+                float xMax = roomPos.x + (roomSize.x / 2);
+
+                int split = (int)Random.Range(xMin + 1, xMax - 1);
+
+                GameObject oldRoom = roomTransforms[randomRoom].gameObject;
 
                 yield return new WaitForSeconds(.1f);
 
-                roomSizes.Add(new Vector3(roomSizes[randomRoom].x - split, roomSizes[randomRoom].y, roomSizes[randomRoom].z));
+                float leftWidth = split - xMin;
+                Vector3 leftPos = new Vector3((xMin + split) / 2, roomPos.y, roomPos.z);
+                Vector3 leftSize = new Vector3(leftWidth, roomSize.y, roomSize.z);
 
                 yield return new WaitForSeconds(.1f);
 
-                GameObject room1 = new GameObject("Room1");
-                room1.transform.position = new Vector3((roomTransforms[randomRoom].position.x + (roomSizes[randomRoom].x / 2) - split) / 2, roomTransforms[randomRoom].position.y, roomTransforms[randomRoom].position.z);
-                roomTransforms.Add(room1.transform);
+                float rightWidth = xMax - split;
+                Vector3 rightPos = new Vector3((split + xMax) / 2, roomPos.y, roomPos.z);
+                Vector3 rightSize = new Vector3(rightWidth, roomSize.y, roomSize.z);
 
                 yield return new WaitForSeconds(.1f);
-
-                roomSizes.Add(new Vector3(split, roomSizes[randomRoom].y, roomSizes[randomRoom].z));
-
-                yield return new WaitForSeconds(.1f);
-
-                GameObject room2 = new GameObject("Room2");
-                room2.transform.position = new Vector3(roomTransforms[randomRoom].position.x + (roomSizes[randomRoom].x / 2) - (split / 2), roomTransforms[randomRoom].position.y, roomTransforms[randomRoom].position.z);
-                roomTransforms.Add(room2.transform);
-
-                yield return new WaitForSeconds(.1f); // Wait for 2 seconds
 
                 roomSizes.RemoveAt(randomRoom);
                 roomTransforms.RemoveAt(randomRoom);
 
-                Debug.Log(room1.transform.position);
-                Debug.Log(room2.transform.position);
+                yield return new WaitForSeconds(.1f);
+
+                roomSizes.Add(leftSize);
+                roomTransforms.Add(new GameObject("Left Room").transform);
+                roomTransforms.Last().position = leftPos;
+
+                yield return new WaitForSeconds(.1f);
+
+                roomSizes.Add(rightSize);
+                roomTransforms.Add(new GameObject("Right Room").transform);
+                roomTransforms.Last().position = rightPos;
+
+
+            
             } else if(i % 2 == 1)
             {
-                Debug.Log("Step 1: Start");
-                int randomRoom = 0;
-                int split = (int)Random.Range(1, roomSizes[randomRoom].z -1);
+                int biggestIndex = 0;
+                float biggestSize = roomSizes[0].x; // Assume first room is the biggest
+
+                for (int x = 1; x < roomSizes.Count; x++)
+                {
+                    if (roomSizes[x].z > biggestSize)
+                    {
+                        biggestSize = roomSizes[x].z;
+                        biggestIndex = x;
+                    }
+                }
+
+                int randomRoom = biggestIndex;
+
+                Vector3 roomPos = roomTransforms[randomRoom].position;
+                Vector3 roomSize = roomSizes[randomRoom];
+
+                float zMin = roomPos.z - (roomSize.z / 2);
+                float zMax = roomPos.z + (roomSize.z / 2);
+
+                int split = (int)Random.Range(zMin + 1, zMax - 1);
+
+                GameObject oldRoom = roomTransforms[randomRoom].gameObject;
 
                 yield return new WaitForSeconds(.1f);
 
-                roomSizes.Add(new Vector3(roomSizes[randomRoom].x, roomSizes[randomRoom].y, roomSizes[randomRoom].z - split));
+                float frontDepth = split - zMin;
+                Vector3 frontPos = new Vector3(roomPos.x, roomPos.y, (zMin + split) / 2);
+                Vector3 frontSize = new Vector3(roomSize.x, roomSize.y, frontDepth);
 
                 yield return new WaitForSeconds(.1f);
 
-                GameObject room1 = new GameObject("Room1");
-                room1.transform.position = new Vector3(roomTransforms[randomRoom].position.x, roomTransforms[randomRoom].position.y, (roomTransforms[randomRoom].position.z + roomSizes[randomRoom].z / 2 - split) / 2);
-                roomTransforms.Add(room1.transform);
+                float backDepth = zMax - split;
+                Vector3 backPos = new Vector3(roomPos.x, roomPos.y, (split + zMax) / 2);
+                Vector3 backSize = new Vector3(roomSize.x, roomSize.y, backDepth);
 
                 yield return new WaitForSeconds(.1f);
-
-                roomSizes.Add(new Vector3(roomSizes[randomRoom].x, roomSizes[randomRoom].y, split));
-
-                yield return new WaitForSeconds(.1f);
-
-                GameObject room2 = new GameObject("Room2");
-                room2.transform.position = new Vector3(roomTransforms[randomRoom].position.x, roomTransforms[randomRoom].position.y, roomTransforms[randomRoom].position.z + roomSizes[randomRoom].z / 2 - (split / 2));
-                roomTransforms.Add(room2.transform);
-
-                yield return new WaitForSeconds(.1f); // Wait for 2 seconds
 
                 roomSizes.RemoveAt(randomRoom);
                 roomTransforms.RemoveAt(randomRoom);
 
-                Debug.Log(room1.transform.position);
-                Debug.Log(room2.transform.position);
+                yield return new WaitForSeconds(.1f);
+
+                roomSizes.Add(frontSize);
+                roomTransforms.Add(new GameObject("Left Room").transform);
+                roomTransforms.Last().position = frontPos;
+
+                yield return new WaitForSeconds(.1f);
+
+                roomSizes.Add(backSize);
+                roomTransforms.Add(new GameObject("Right Room").transform);
+                roomTransforms.Last().position = backPos;
             }
         }  
     }
