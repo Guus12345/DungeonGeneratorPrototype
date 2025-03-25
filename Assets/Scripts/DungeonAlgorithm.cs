@@ -29,7 +29,7 @@ public class DungeonAlgorithm : MonoBehaviour
 
                 for (int x = 1; x < roomSizes.Count; x++)
                 {
-                    if (roomSizes[x].x > biggestSize)
+                    if ((roomSizes[x].x + roomSizes[x].z) / 2 > biggestSize)
                     {
                         biggestSize = roomSizes[x].x;
                         biggestIndex = x;
@@ -86,7 +86,7 @@ public class DungeonAlgorithm : MonoBehaviour
 
                 for (int x = 1; x < roomSizes.Count; x++)
                 {
-                    if (roomSizes[x].z > biggestSize)
+                    if ((roomSizes[x].x + roomSizes[x].z) / 2  > biggestSize)
                     {
                         biggestSize = roomSizes[x].z;
                         biggestIndex = x;
