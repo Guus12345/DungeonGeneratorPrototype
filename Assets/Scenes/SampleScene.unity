@@ -421,11 +421,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a93a0aa038d18a4495c5e7e455c0cec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startingSize: {x: 50, y: 0, z: 50}
-  minLimit: 6
-  maxLimit: 18
-  useSeed: 1
-  seed: 69420
+  startingSize: {x: 50, y: 3, z: 50}
+  minLimit: 10
+  maxLimit: 15
+  useSeed: 0
+  seed: 2025
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
