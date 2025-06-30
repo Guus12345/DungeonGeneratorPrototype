@@ -424,8 +424,8 @@ MonoBehaviour:
   startingSize: {x: 50, y: 3, z: 50}
   minSizeLimit: 12
   maxSizeLimit: 12
-  useSeed: 1
-  seed: 37
+  useSeed: 0
+  seed: -1407304317
   doorWidth: 2
   doorProbability: 0.5
 --- !u!1660057539 &9223372036854775807

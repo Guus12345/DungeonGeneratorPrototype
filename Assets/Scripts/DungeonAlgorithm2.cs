@@ -21,8 +21,6 @@ public class DungeonAlgorithm2 : MonoBehaviour
         public int id;
         public Transform transform;
         public Vector3Int size;
-        public List<int> neighbors = new List<int>();
-
         public RoomNode(int id, Transform t, Vector3Int s)
         {
             this.id = id;
@@ -31,41 +29,47 @@ public class DungeonAlgorithm2 : MonoBehaviour
         }
     }
 
+    private List<RoomNode> unfinishedRooms = new List<RoomNode>();
     private List<RoomNode> rooms = new List<RoomNode>();
+    private List<List<int>> wallAdjacentRooms = new List<List<int>>();
     private List<GameObject> walls = new List<GameObject>();
-    // Store branching connections for Gizmos
-    private List<(int a, int b)> connections = new List<(int a, int b)>();
     private List<Vector3Int> wallSizes = new List<Vector3Int>();
+    private List<int> wallRoomIds = new List<int>();
+
+    private List<GameObject> doors = new List<GameObject>();
+    private List<Vector3Int> doorSizes = new List<Vector3Int>();
+    private List<(int a, int b)> doorConnections = new List<(int a, int b)>();
+    private Dictionary<(int a, int b), GameObject> doorMap = new Dictionary<(int a, int b), GameObject>();
+
+    private List<(int a, int b)> connections = new List<(int a, int b)>();
 
     private void Start()
     {
         if (!useSeed)
-            seed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            seed = Random.Range(int.MinValue, int.MaxValue);
         rng = new System.Random(seed);
 
         // Create initial room
         GameObject go = new GameObject("Room_" + nextRoomId);
         go.transform.position = new Vector3(startingSize.x / 2f, 0, startingSize.z / 2f);
-        var root = new RoomNode(nextRoomId++, go.transform, new Vector3Int(startingSize.x, 0, startingSize.z));
-        rooms.Add(root);
+        rooms.Add(new RoomNode(nextRoomId++, go.transform, startingSize));
 
         StartCoroutine(RoomGeneration());
     }
 
     private IEnumerator RoomGeneration()
     {
-        var unfinished = new List<RoomNode>(rooms);
+        unfinishedRooms = new List<RoomNode>(rooms);
         rooms.Clear();
 
-        while (unfinished.Count > 0)
+        while (unfinishedRooms.Count > 0)
         {
-            var current = unfinished[unfinished.Count - 1];
-            unfinished.RemoveAt(unfinished.Count - 1);
-
+            var current = unfinishedRooms.Last();
+            unfinishedRooms.RemoveAt(unfinishedRooms.Count - 1);
+            var pos = current.transform.position;
+            var sz = current.size;
             int axis = rng.Next(0, 2);
             int limit = rng.Next(minSizeLimit, maxSizeLimit);
-            Vector3 pos = current.transform.position;
-            Vector3Int sz = current.size;
 
             bool splitX = (axis == 0 || sz.z < limit) && sz.x > limit;
             bool splitZ = (axis == 1 || sz.x < limit) && sz.z > limit;
@@ -75,44 +79,28 @@ public class DungeonAlgorithm2 : MonoBehaviour
                 int cut = rng.Next(3, sz.x - 3);
                 float xMin = pos.x - sz.x / 2f;
                 float xMax = pos.x + sz.x / 2f;
-
-                // Room A
-                GameObject goA = new GameObject("Room_" + nextRoomId);
-                goA.transform.position = new Vector3(xMin + cut / 2f, pos.y, pos.z);
-                var nodeA = new RoomNode(nextRoomId++, goA.transform, new Vector3Int(cut, 0, sz.z));
-
-                // Room B
-                GameObject goB = new GameObject("Room_" + nextRoomId);
+                var goA = new GameObject("Room_" + nextRoomId);
+                goA.transform.position = new Vector3(xMin + cut / 2f + 0.5f, pos.y, pos.z);
+                var nodeA = new RoomNode(nextRoomId++, goA.transform, new Vector3Int(cut + 1, sz.y, sz.z));
+                var goB = new GameObject("Room_" + nextRoomId);
                 goB.transform.position = new Vector3(xMax - (sz.x - cut) / 2f, pos.y, pos.z);
-                var nodeB = new RoomNode(nextRoomId++, goB.transform, new Vector3Int(sz.x - cut, 0, sz.z));
-
-                nodeA.neighbors.Add(nodeB.id);
-                nodeB.neighbors.Add(nodeA.id);
-
-                unfinished.Add(nodeA);
-                unfinished.Add(nodeB);
+                var nodeB = new RoomNode(nextRoomId++, goB.transform, new Vector3Int(sz.x - cut, sz.y, sz.z));
+                unfinishedRooms.Add(nodeA);
+                unfinishedRooms.Add(nodeB);
             }
             else if (splitZ)
             {
                 int cut = rng.Next(3, sz.z - 3);
                 float zMin = pos.z - sz.z / 2f;
                 float zMax = pos.z + sz.z / 2f;
-
-                // Room A
-                GameObject goA = new GameObject("Room_" + nextRoomId);
-                goA.transform.position = new Vector3(pos.x, pos.y, zMin + cut / 2f);
-                var nodeA = new RoomNode(nextRoomId++, goA.transform, new Vector3Int(sz.x, 0, cut));
-
-                // Room B
-                GameObject goB = new GameObject("Room_" + nextRoomId);
+                var goA = new GameObject("Room_" + nextRoomId);
+                goA.transform.position = new Vector3(pos.x, pos.y, zMin + cut / 2f + 0.5f);
+                var nodeA = new RoomNode(nextRoomId++, goA.transform, new Vector3Int(sz.x, sz.y, cut + 1));
+                var goB = new GameObject("Room_" + nextRoomId);
                 goB.transform.position = new Vector3(pos.x, pos.y, zMax - (sz.z - cut) / 2f);
-                var nodeB = new RoomNode(nextRoomId++, goB.transform, new Vector3Int(sz.x, 0, sz.z - cut));
-
-                nodeA.neighbors.Add(nodeB.id);
-                nodeB.neighbors.Add(nodeA.id);
-
-                unfinished.Add(nodeA);
-                unfinished.Add(nodeB);
+                var nodeB = new RoomNode(nextRoomId++, goB.transform, new Vector3Int(sz.x, sz.y, sz.z - cut));
+                unfinishedRooms.Add(nodeA);
+                unfinishedRooms.Add(nodeB);
             }
             else
             {
@@ -122,300 +110,172 @@ public class DungeonAlgorithm2 : MonoBehaviour
             yield return new WaitForFixedUpdate();
         }
 
-        StartCoroutine(WallGeneration());
+        unfinishedRooms.Clear();
+        StartCoroutine(DoorGeneration());
     }
 
-    private IEnumerator WallGeneration()
+    private IEnumerator DoorGeneration()
     {
-        float halfY = startingSize.y / 2f;
+        float halfY = startingSize.y * 0.5f;
 
         for (int i = 0; i < rooms.Count; i++)
         {
-            var node = rooms[i];
-            Vector3 pos = node.transform.position;
-            Vector3Int sz = node.size;
-
-            Vector3[] positions = new Vector3[4]
-            {
-                pos + new Vector3(0, halfY, -sz.z/2f + 0.5f),
-                pos + new Vector3(0, halfY,  sz.z/2f + 0.5f),
-                pos + new Vector3(-sz.x/2f + 0.5f, halfY, 0),
-                pos + new Vector3( sz.x/2f + 0.5f, halfY, 0)
-            };
-
-            Vector3Int[] sizes = new Vector3Int[4]
-            {
-                new Vector3Int(sz.x, startingSize.y, 1),
-                new Vector3Int(sz.x, startingSize.y, 1),
-                new Vector3Int(1, startingSize.y, sz.z),
-                new Vector3Int(1, startingSize.y, sz.z)
-            };
-
-            bool[] isX = new bool[4] { true, true, false, false };
-
-            for (int k = 0; k < 4; k++)
-            {
-                TryAddWall(positions[k], sizes[k], $"wall_{node.id}_{k}", isX[k]);
-                yield return new WaitForFixedUpdate();
-            }
-        }
-
-        StartCoroutine(ConnectAndPrune());
-        yield return null;
-    }
-
-    private void TryAddWall(Vector3 pos, Vector3Int size, string name, bool isXAxis)
-    {
-        const float eps = 0.01f;
-        bool onEdge = false;
-        foreach (var node in rooms)
-        {
-            var rPos = node.transform.position;
-            var rSz = node.size;
-            if (isXAxis)
-            {
-                // Horizontal wall must sit at z = roomZ +/- (roomDepth/2 + 0.5)
-                float z0 = rPos.z - rSz.z / 2f + 0.5f;
-                float z1 = rPos.z + rSz.z / 2f + 0.5f;
-                if ((Mathf.Abs(pos.z - z0) < eps || Mathf.Abs(pos.z - z1) < eps)
-                    && pos.x > rPos.x - rSz.x / 2f - eps
-                    && pos.x < rPos.x + rSz.x / 2f + eps)
-                {
-                    onEdge = true; break;
-                }
-            }
-            else
-            {
-                // Vertical wall must sit at x = roomX +/- (roomWidth/2 + 0.5)
-                float x0 = rPos.x - rSz.x / 2f + 0.5f;
-                float x1 = rPos.x + rSz.x / 2f + 0.5f;
-                if ((Mathf.Abs(pos.x - x0) < eps || Mathf.Abs(pos.x - x1) < eps)
-                    && pos.z > rPos.z - rSz.z / 2f - eps
-                    && pos.z < rPos.z + rSz.z / 2f + eps)
-                {
-                    onEdge = true; break;
-                }
-            }
-        }
-        if (!onEdge)
-            return;  // this wall isn’t actually on any room boundary
-
-        Vector2 p2 = new Vector2(pos.x, pos.z);
-        Vector2 s2 = new Vector2(size.x, size.z);
-
-        for (int j = 0; j < walls.Count; j++)
-        {
-            Vector3 wp = walls[j].transform.position;
-            Vector2 wp2 = new Vector2(wp.x, wp.z);
-            Vector2 ws2 = new Vector2(wallSizes[j].x, wallSizes[j].z);
-
-            if (isXAxis)
-            {
-                if (Mathf.Abs(p2.y - wp2.y) < 0.01f)
-                {
-                    float minA = p2.x - s2.x / 2f, maxA = p2.x + s2.x / 2f;
-                    float minB = wp2.x - ws2.x / 2f, maxB = wp2.x + ws2.x / 2f;
-                    if (maxA > minB && minA < maxB)
-                        return;
-                }
-            }
-            else
-            {
-                if (Mathf.Abs(p2.x - wp2.x) < 0.01f)
-                {
-                    float minA = p2.y - s2.y / 2f, maxA = p2.y + s2.y / 2f;
-                    float minB = wp2.y - ws2.y / 2f, maxB = wp2.y + ws2.y / 2f;
-                    if (maxA > minB && minA < maxB)
-                        return;
-                }
-            }
-        }
-
-        GameObject w = new GameObject(name);
-        w.transform.position = new Vector3(
-            pos.x,
-            startingSize.y * 0.5f,
-            pos.z
-        );
-        walls.Add(w);
-        wallSizes.Add(size);
-    }
-
-    // Returns, for each room ID, a list of (neighborID, isXAxis)
-    Dictionary<int, List<(int neighborId, bool isXAxis)>> ComputeFinalAdjacency()
-    {
-        var adj = new Dictionary<int, List<(int, bool)>>();
-        foreach (var A in rooms)
-            adj[A.id] = new List<(int, bool)>();
-
-        for (int i = 0; i < rooms.Count; i++)
-        {
-            var A = rooms[i];
-            var Amin = A.transform.position - new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
-            var Amax = A.transform.position + new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
-
             for (int j = i + 1; j < rooms.Count; j++)
             {
+                var A = rooms[i];
                 var B = rooms[j];
-                var Bmin = B.transform.position - new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
-                var Bmax = B.transform.position + new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
 
-                // Horizontal adjacency?
-                bool touchX = Mathf.Approximately(Amax.x, Bmin.x) || Mathf.Approximately(Bmax.x, Amin.x);
-                bool overlapZ = Amax.z > Bmin.z && Bmax.z > Amin.z;
-                if (touchX && overlapZ)
-                {
-                    adj[A.id].Add((B.id, true));
-                    adj[B.id].Add((A.id, true));
-                    continue;
-                }
+                // Build each room's AABB in XZ
+                Vector3 minA = A.transform.position - new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
+                Vector3 maxA = A.transform.position + new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
+                Vector3 minB = B.transform.position - new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
+                Vector3 maxB = B.transform.position + new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
 
-                // Vertical adjacency?
-                bool touchZ = Mathf.Approximately(Amax.z, Bmin.z) || Mathf.Approximately(Bmax.z, Amin.z);
-                bool overlapX = Amax.x > Bmin.x && Bmax.x > Amin.x;
-                if (touchZ && overlapX)
+                // Compute intersection bounds
+                float ix1 = Mathf.Max(minA.x, minB.x);
+                float iz1 = Mathf.Max(minA.z, minB.z);
+                float ix2 = Mathf.Min(maxA.x, maxB.x);
+                float iz2 = Mathf.Min(maxA.z, maxB.z);
+
+                if (ix2 > ix1 && iz2 > iz1)
                 {
-                    adj[A.id].Add((B.id, false));
-                    adj[B.id].Add((A.id, false));
+                    // Intersection exists: pick its center
+                    Vector3 center = new Vector3((ix1 + ix2) * 0.5f, halfY, (iz1 + iz2) * 0.5f);
+
+                    // Count how many rooms cover that point
+                    int coverCount = 0;
+                    foreach (var R in rooms)
+                    {
+                        Vector3 minR = R.transform.position - new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
+                        Vector3 maxR = R.transform.position + new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
+                        if (center.x >= minR.x && center.x <= maxR.x
+                         && center.z >= minR.z && center.z <= maxR.z)
+                        {
+                            coverCount++;
+                            if (coverCount > 2) break;
+                        }
+                    }
+
+                    // Only if exactly two rooms overlap here...
+                    if (coverCount == 2)
+                    {
+                        var door = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        door.name = $"door_{A.id}_{B.id}";
+                        door.transform.position = center;
+
+                        float overlapX = ix2 - ix1;
+                        float overlapZ = iz2 - iz1;
+
+                        // Size door along the smaller overlap axis
+                        if (overlapX < overlapZ)
+                            door.transform.localScale = new Vector3(overlapX, startingSize.y, doorWidth);
+                        else
+                            door.transform.localScale = new Vector3(doorWidth, startingSize.y, overlapZ);
+
+                        doors.Add(door);
+                        doorSizes.Add(new Vector3Int(
+                            Mathf.RoundToInt(door.transform.localScale.x),
+                            startingSize.y,
+                            Mathf.RoundToInt(door.transform.localScale.z)
+                        ));
+                        doorConnections.Add((A.id, B.id));
+                        doorMap[(A.id, B.id)] = door;
+                    }
                 }
             }
+
+            // spread work across frames if you like:
+            yield return new WaitForFixedUpdate();
         }
 
-        return adj;
+        // all doors placed, you can now call ConnectAndPrune or whatever next step
+        yield break;
     }
-
 
 
     private IEnumerator ConnectAndPrune()
     {
-        // Rebuild adjacency on *final* rooms
-        var adjacency = ComputeFinalAdjacency();
-        int startId = adjacency.Keys.ElementAtOrDefault(rng.Next(adjacency.Count));
-        var visited = new HashSet<int> { startId };
+        // assign door node IDs
+        int baseRoomCount = rooms.Count > 0 ? rooms.Max(r => r.id) + 1 : nextRoomId;
+        var doorNodeId = new Dictionary<(int, int), int>();
+        foreach (var pair in doorConnections) { doorNodeId[pair] = baseRoomCount++; }
+        // build graph
+        var graph = new Dictionary<int, List<int>>();
+        foreach (var r in rooms) graph[r.id] = new List<int>();
+        foreach (var kv in doorNodeId) graph[kv.Value] = new List<int>();
+        foreach (var kv in doorNodeId) { graph[kv.Key.Item1].Add(kv.Value); graph[kv.Key.Item2].Add(kv.Value); graph[kv.Value].Add(kv.Key.Item1); graph[kv.Value].Add(kv.Key.Item2); }
+        var visited = new HashSet<int>();
         var queue = new Queue<int>();
-        queue.Enqueue(startId);
-
+        int start = rooms[rng.Next(rooms.Count)].id;
+        visited.Add(start); queue.Enqueue(start);
         while (queue.Count > 0)
         {
             int cur = queue.Dequeue();
-
-            // pick up to 2 neighbors at random
-            var choices = adjacency[cur]
-                .Where(pair => !visited.Contains(pair.neighborId))
-                .OrderBy(_ => rng.Next())
-                .Take(rng.Next(1,3))
-                .ToList();
-
-            foreach (var (nxt, isXAxis) in choices)
+            foreach (var nxt in graph[cur])
             {
-                visited.Add(nxt);
-                queue.Enqueue(nxt);
-                connections.Add((cur, nxt));
-
-                // carve hole with the known orientation
-                SplitWallForDoor(cur, nxt, isXAxis);
-                yield return new WaitForFixedUpdate();
+                if (visited.Contains(nxt)) continue;
+                visited.Add(nxt); queue.Enqueue(nxt);
+                // record only door->room transitions
+                if (cur >= rooms.Min(r => r.id) && cur < baseRoomCount && nxt < rooms.Max(r => r.id) + 1 && nxt >= 0)
+                {
+                    // cur is door node
+                    var doorKey = doorNodeId.First(x => x.Value == cur).Key;
+                    connections.Add(doorKey);
+                }
+            }
+            yield return new WaitForFixedUpdate();
+        }
+        // prune rooms
+        var toRemove = rooms.Where(r => !visited.Contains(r.id)).ToList();
+        foreach (var n in toRemove) { rooms.Remove(n); Destroy(n.transform.gameObject); }
+        // prune doors
+        for (int i = doors.Count - 1; i >= 0; i--)
+        {
+            var pair = doorConnections[i];
+            if (!connections.Contains(pair))
+            {
+                Destroy(doors[i]);
+                doors.RemoveAt(i);
+                doorSizes.RemoveAt(i);
+                doorConnections.RemoveAt(i);
+                doorMap.Remove(pair);
             }
         }
-
-        Debug.Log("[ConnectAndPrune] BFS complete, pruning...");
-        // Prune unreachable
-        var toRemove = rooms.Where(r => !visited.Contains(r.id)).ToList();
-        foreach (var node in toRemove)
+        for (int i = walls.Count - 1; i >= 0; i--)
         {
-            rooms.Remove(node);
-            Destroy(node.transform.gameObject);
-            Debug.Log($"[Prune] Removed room {node.id}");
+            // if none of the rooms that share this wall are in the visited set
+            bool touchesSurvivor = wallAdjacentRooms[i].Any(roomId => visited.Contains(roomId));
+            if (!touchesSurvivor)
+            {
+                Destroy(walls[i]);
+                walls.RemoveAt(i);
+                wallSizes.RemoveAt(i);
+                wallAdjacentRooms.RemoveAt(i);
+            }
         }
     }
-
-
-    void SplitWallForDoor(int idA, int idB, bool isXAxisWall)
-    {
-        var A = rooms.Find(r => r.id == idA);
-        var B = rooms.Find(r => r.id == idB);
-        Vector3 center = (A.transform.position + B.transform.position) / 2f;
-
-        // Find the wall at that spot
-        for (int i = 0; i < walls.Count; i++)
-        {
-            if (!new Bounds(walls[i].transform.position, wallSizes[i]).Contains(center))
-                continue;
-
-            // remove original
-            Destroy(walls[i]);
-            walls.RemoveAt(i);
-            wallSizes.RemoveAt(i);
-
-            // Now split into two segments along the correct axis:
-            float fullLen = isXAxisWall ? wallSizes[i].x : wallSizes[i].z;
-            float halfGap = doorWidth / 2f;
-            float halfSeg = (fullLen - doorWidth) / 2f;
-            float h = startingSize.y;
-
-            Vector3 size1 = isXAxisWall
-                ? new Vector3(halfSeg, h, 1)
-                : new Vector3(1, h, halfSeg);
-
-            Vector3 offset = isXAxisWall
-                ? new Vector3(-halfGap - halfSeg / 2f, 0, 0)
-                : new Vector3(0, 0, -halfGap - halfSeg / 2f);
-
-            // Left/Bottom piece
-            var wA = new GameObject($"doorL_{idA}_{idB}");
-            wA.transform.position = new Vector3(center.x + offset.x, startingSize.y/2f, center.z + offset.z);
-            walls.Add(wA);
-            wallSizes.Add(Vector3Int.RoundToInt(size1));
-
-            // Right/Top piece
-            var wB = new GameObject($"doorR_{idA}_{idB}");
-            wB.transform.position = new Vector3(center.x + offset.x, startingSize.y / 2f, center.z + offset.z);
-            walls.Add(wB);
-            wallSizes.Add(Vector3Int.RoundToInt(size1));
-
-            break;
-        }
-    }
-
 
     private void OnDrawGizmos()
     {
-        // Draw rooms
+        Gizmos.color = Color.blue;
+        foreach (var n in unfinishedRooms)
+            if (n?.transform != null) Gizmos.DrawWireCube(n.transform.position, new Vector3(n.size.x, 0, n.size.z));
+
         Gizmos.color = Color.green;
-        foreach (var node in rooms)
-        {
-            if (node.transform == null) continue;
-            Gizmos.DrawWireCube(node.transform.position, node.size);
-        }
+            foreach (var n in rooms)
+                if (n?.transform != null) Gizmos.DrawWireCube(n.transform.position, new Vector3(n.size.x, 0, n.size.z));
 
-        // Draw walls
         Gizmos.color = Color.magenta;
-        for (int i = 0; i < walls.Count; i++)
-        {
-            if (walls[i] == null) continue;
-            Gizmos.DrawWireCube(walls[i].transform.position, wallSizes[i]);
-        }
+            foreach (var n in rooms)
+                if (n?.transform != null) Gizmos.DrawWireCube(new Vector3(n.transform.position.x, n.transform.position.y + (float)n.size.y / 2, n.transform.position.z), n.size);
 
-        // Draw branching connections
+        Gizmos.color = Color.red;
+            for (int i = 0; i < doors.Count; i++)
+                if (doors[i] != null) Gizmos.DrawWireCube(doors[i].transform.position, doorSizes[i]);
+
         Gizmos.color = Color.cyan;
-        foreach (var pair in connections)
-        {
-            int a = pair.a;
-            int b = pair.b;
-            var nodeA = rooms.Find(n => n.id == a);
-            var nodeB = rooms.Find(n => n.id == b);
-            if (nodeA == null || nodeB == null) continue;
-            if (nodeA.transform == null || nodeB.transform == null) continue;
-            Gizmos.DrawLine(nodeA.transform.position, nodeB.transform.position);
-        }
-    
-        Gizmos.color = Color.green;
-        foreach (var node in rooms)
-            Gizmos.DrawWireCube(node.transform.position, node.size);
-
-        Gizmos.color = Color.magenta;
-        for (int i = 0; i<walls.Count; i++)
-            Gizmos.DrawWireCube(walls[i].transform.position, wallSizes[i]);
+            foreach (var (a, b) in connections) { var A = rooms.Find(r => r.id == a); var B = rooms.Find(r => r.id == b);
+                if (A != null && B != null) Gizmos.DrawLine(A.transform.position, B.transform.position); }
     }
 }
 
@@ -423,12 +283,9 @@ public static class ListExtensions
 {
     public static void Shuffle<T>(this IList<T> list, System.Random rng)
     {
-        int n = list.Count;
-        while (n > 1)
+        int n = list.Count; while (n > 1)
         {
-            n--;
-            int k = rng.Next(n + 1);
-            (list[k], list[n]) = (list[n], list[k]);
+            n--; int k = rng.Next(n + 1); var tmp = list[k]; list[k] = list[n]; list[n] = tmp;
         }
     }
 }
