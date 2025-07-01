@@ -31,11 +31,6 @@ public class DungeonAlgorithm2 : MonoBehaviour
 
     private List<RoomNode> unfinishedRooms = new List<RoomNode>();
     private List<RoomNode> rooms = new List<RoomNode>();
-    private List<List<int>> wallAdjacentRooms = new List<List<int>>();
-    private List<GameObject> walls = new List<GameObject>();
-    private List<Vector3Int> wallSizes = new List<Vector3Int>();
-    private List<int> wallRoomIds = new List<int>();
-
     private List<GameObject> doors = new List<GameObject>();
     private List<Vector3Int> doorSizes = new List<Vector3Int>();
     private List<(int a, int b)> doorConnections = new List<(int a, int b)>();
@@ -125,72 +120,97 @@ public class DungeonAlgorithm2 : MonoBehaviour
                 var A = rooms[i];
                 var B = rooms[j];
 
-                // Build each room's AABB in XZ
+                // Compute XZ overlap
                 Vector3 minA = A.transform.position - new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
                 Vector3 maxA = A.transform.position + new Vector3(A.size.x / 2f, 0, A.size.z / 2f);
                 Vector3 minB = B.transform.position - new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
                 Vector3 maxB = B.transform.position + new Vector3(B.size.x / 2f, 0, B.size.z / 2f);
 
-                // Compute intersection bounds
                 float ix1 = Mathf.Max(minA.x, minB.x);
                 float iz1 = Mathf.Max(minA.z, minB.z);
                 float ix2 = Mathf.Min(maxA.x, maxB.x);
                 float iz2 = Mathf.Min(maxA.z, maxB.z);
 
-                if (ix2 > ix1 && iz2 > iz1)
+                if (ix2 <= ix1 || iz2 <= iz1)
+                    continue;
+
+                Vector3 center = new Vector3((ix1 + ix2) * 0.5f, halfY, (iz1 + iz2) * 0.5f);
+
+                // Must have exactly two rooms at center and ±1m along wall axis:
+                if (CountCoverAt(center) != 2)
+                    continue;
+
+                // after computing:
+                float overlapX = ix2 - ix1;
+                float overlapZ = iz2 - iz1;
+
+                // choose wall‐axis direction correctly:
+                bool useXWall = overlapX < overlapZ;
+                // if the overlap in X is smaller, wall runs along Z, so step in Z:
+                Vector3 sideDir = useXWall ? Vector3.forward : Vector3.right;
+
+                // now test at ±half‐door width
+                float offset = doorWidth * 0.5f + 0.01f;
+                if (CountCoverAt(center + sideDir * offset) != 2 ||
+                    CountCoverAt(center - sideDir * offset) != 2)
+                    continue;
+
+                // Spawn door
+                Debug.Log("hi");
+                Vector3 scale = useXWall
+                    ? new Vector3(overlapX, startingSize.y, doorWidth)
+                    : new Vector3(doorWidth, startingSize.y, overlapZ);
+
+                if (useXWall)
                 {
-                    // Intersection exists: pick its center
-                    Vector3 center = new Vector3((ix1 + ix2) * 0.5f, halfY, (iz1 + iz2) * 0.5f);
-
-                    // Count how many rooms cover that point
-                    int coverCount = 0;
-                    foreach (var R in rooms)
-                    {
-                        Vector3 minR = R.transform.position - new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
-                        Vector3 maxR = R.transform.position + new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
-                        if (center.x >= minR.x && center.x <= maxR.x
-                         && center.z >= minR.z && center.z <= maxR.z)
-                        {
-                            coverCount++;
-                            if (coverCount > 2) break;
-                        }
-                    }
-
-                    // Only if exactly two rooms overlap here...
-                    if (coverCount == 2)
-                    {
-                        var door = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                        door.name = $"door_{A.id}_{B.id}";
-                        door.transform.position = center;
-
-                        float overlapX = ix2 - ix1;
-                        float overlapZ = iz2 - iz1;
-
-                        // Size door along the smaller overlap axis
-                        if (overlapX < overlapZ)
-                            door.transform.localScale = new Vector3(overlapX, startingSize.y, doorWidth);
-                        else
-                            door.transform.localScale = new Vector3(doorWidth, startingSize.y, overlapZ);
-
-                        doors.Add(door);
-                        doorSizes.Add(new Vector3Int(
-                            Mathf.RoundToInt(door.transform.localScale.x),
-                            startingSize.y,
-                            Mathf.RoundToInt(door.transform.localScale.z)
-                        ));
-                        doorConnections.Add((A.id, B.id));
-                        doorMap[(A.id, B.id)] = door;
-                    }
+                    center.z = Mathf.Round(center.z);
                 }
+                else
+                {
+                    center.x = Mathf.Round(center.x);
+                }
+
+                GameObject door = new GameObject();
+                door.name = $"door_{A.id}_{B.id}";
+                door.transform.position = center;
+                door.transform.localScale = scale;
+
+                doors.Add(door);
+                doorSizes.Add(new Vector3Int(
+                    Mathf.RoundToInt(scale.x),
+                    startingSize.y,
+                    Mathf.RoundToInt(scale.z)
+                ));
+                doorConnections.Add((A.id, B.id));
+                doorMap[(A.id, B.id)] = door;
             }
 
-            // spread work across frames if you like:
             yield return new WaitForFixedUpdate();
+
         }
 
-        // all doors placed, you can now call ConnectAndPrune or whatever next step
-        yield break;
+        StartCoroutine(ConnectAndPrune());
     }
+
+    // Helper: count how many rooms cover a given XZ point
+    private int CountCoverAt(Vector3 point)
+    {
+        int count = 0;
+        foreach (var R in rooms)
+        {
+            Vector3 rMin = R.transform.position - new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
+            Vector3 rMax = R.transform.position + new Vector3(R.size.x / 2f, 0, R.size.z / 2f);
+            if (point.x >= rMin.x && point.x <= rMax.x
+             && point.z >= rMin.z && point.z <= rMax.z)
+            {
+                count++;
+                if (count > 2)
+                    return count;
+            }
+        }
+        return count;
+    }
+
 
 
     private IEnumerator ConnectAndPrune()
@@ -239,18 +259,6 @@ public class DungeonAlgorithm2 : MonoBehaviour
                 doorSizes.RemoveAt(i);
                 doorConnections.RemoveAt(i);
                 doorMap.Remove(pair);
-            }
-        }
-        for (int i = walls.Count - 1; i >= 0; i--)
-        {
-            // if none of the rooms that share this wall are in the visited set
-            bool touchesSurvivor = wallAdjacentRooms[i].Any(roomId => visited.Contains(roomId));
-            if (!touchesSurvivor)
-            {
-                Destroy(walls[i]);
-                walls.RemoveAt(i);
-                wallSizes.RemoveAt(i);
-                wallAdjacentRooms.RemoveAt(i);
             }
         }
     }
