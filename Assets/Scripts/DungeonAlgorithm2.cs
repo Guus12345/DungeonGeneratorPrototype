@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.Tilemaps;
 
 public class DungeonAlgorithm2 : MonoBehaviour
 {
@@ -11,12 +13,9 @@ public class DungeonAlgorithm2 : MonoBehaviour
     [SerializeField] private bool useSeed;
     [SerializeField] private int seed;
     [SerializeField] private int doorWidth = 2;
-    [SerializeField, Range(0f, 1f)] private float doorProbability = 0.5f;
+    [SerializeField] private UnityEvent onDungeonBuilt;
 
-    private System.Random rng;
-    private int nextRoomId = 0;
-
-    private class RoomNode
+    public class RoomNode
     {
         public int id;
         public Transform transform;
@@ -29,17 +28,23 @@ public class DungeonAlgorithm2 : MonoBehaviour
         }
     }
 
+    private System.Random rng;
     private List<RoomNode> unfinishedRooms = new List<RoomNode>();
     private List<RoomNode> rooms = new List<RoomNode>();
+    private int nextRoomId = 0;
     private List<GameObject> doors = new List<GameObject>();
     private List<Vector3Int> doorSizes = new List<Vector3Int>();
     private List<(int a, int b)> doorConnections = new List<(int a, int b)>();
     private Dictionary<(int a, int b), GameObject> doorMap = new Dictionary<(int a, int b), GameObject>();
-
     private List<(int a, int b)> connections = new List<(int a, int b)>();
+
+    public List<RoomNode> GetRooms() => rooms;
+    public List<GameObject> GetDoors() => doors;
+    public List<Vector3Int> GetDoorSizes() => doorSizes;
 
     private void Start()
     {
+
         if (!useSeed)
             seed = Random.Range(int.MinValue, int.MaxValue);
         rng = new System.Random(seed);
@@ -261,6 +266,8 @@ public class DungeonAlgorithm2 : MonoBehaviour
                 doorMap.Remove(pair);
             }
         }
+
+        onDungeonBuilt.Invoke();
     }
 
     private void OnDrawGizmos()
