@@ -421,12 +421,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a93a0aa038d18a4495c5e7e455c0cec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startingSize: {x: 50, y: 3, z: 50}
+  startingSize: {x: 100, y: 3, z: 100}
   minSizeLimit: 12
   maxSizeLimit: 12
-  useSeed: 0
-  seed: -1407304317
+  useSeed: 1
+  seed: -1357237883
   doorWidth: 2
+  branchChance: 0.175
   onDungeonBuilt:
     m_PersistentCalls:
       m_Calls:

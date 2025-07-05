@@ -13,6 +13,7 @@ public class DungeonAlgorithm2 : MonoBehaviour
     [SerializeField] private bool useSeed;
     [SerializeField] private int seed;
     [SerializeField] private int doorWidth = 2;
+    [SerializeField, Range(0f, 1f)] private float branchChance = 0.8f;
     [SerializeField] private UnityEvent onDungeonBuilt;
 
     public class RoomNode
@@ -220,44 +221,67 @@ public class DungeonAlgorithm2 : MonoBehaviour
 
     private IEnumerator ConnectAndPrune()
     {
-        // assign door node IDs
+        // Assign door node IDs
         int baseRoomCount = rooms.Count > 0 ? rooms.Max(r => r.id) + 1 : nextRoomId;
         var doorNodeId = new Dictionary<(int, int), int>();
-        foreach (var pair in doorConnections) { doorNodeId[pair] = baseRoomCount++; }
-        // build graph
-        var graph = new Dictionary<int, List<int>>();
-        foreach (var r in rooms) graph[r.id] = new List<int>();
-        foreach (var kv in doorNodeId) graph[kv.Value] = new List<int>();
-        foreach (var kv in doorNodeId) { graph[kv.Key.Item1].Add(kv.Value); graph[kv.Key.Item2].Add(kv.Value); graph[kv.Value].Add(kv.Key.Item1); graph[kv.Value].Add(kv.Key.Item2); }
+        foreach (var pair in doorConnections) doorNodeId[pair] = baseRoomCount++;
+
+        // Build room-to-door mapping
+        var roomToDoors = new Dictionary<int, List<(int, int)>>();
+        foreach (var pair in doorConnections)
+        {
+            if (!roomToDoors.ContainsKey(pair.Item1)) roomToDoors[pair.Item1] = new List<(int, int)>();
+            if (!roomToDoors.ContainsKey(pair.Item2)) roomToDoors[pair.Item2] = new List<(int, int)>();
+            roomToDoors[pair.Item1].Add(pair);
+            roomToDoors[pair.Item2].Add(pair);
+        }
+
         var visited = new HashSet<int>();
         var queue = new Queue<int>();
         int start = rooms[rng.Next(rooms.Count)].id;
-        visited.Add(start); queue.Enqueue(start);
+        visited.Add(start);
+        queue.Enqueue(start);
+
         while (queue.Count > 0)
         {
-            int cur = queue.Dequeue();
-            foreach (var nxt in graph[cur])
+            int current = queue.Dequeue();
+
+            if (!roomToDoors.ContainsKey(current)) continue;
+
+            var neighbors = roomToDoors[current];
+            neighbors.Shuffle(rng);
+
+            bool guaranteedConnected = false;
+            foreach (var pair in neighbors)
             {
-                if (visited.Contains(nxt)) continue;
-                visited.Add(nxt); queue.Enqueue(nxt);
-                // record only door->room transitions
-                if (cur >= rooms.Min(r => r.id) && cur < baseRoomCount && nxt < rooms.Max(r => r.id) + 1 && nxt >= 0)
+                int neighbor = pair.Item1 == current ? pair.Item2 : pair.Item1;
+                if (visited.Contains(neighbor)) continue;
+
+                if (!guaranteedConnected || rng.NextDouble() < branchChance)
                 {
-                    // cur is door node
-                    var doorKey = doorNodeId.First(x => x.Value == cur).Key;
-                    connections.Add(doorKey);
+                    visited.Add(neighbor);
+                    queue.Enqueue(neighbor);
+                    connections.Add(pair);
+                    guaranteedConnected = true;
                 }
             }
+
             yield return new WaitForFixedUpdate();
         }
-        // prune rooms
+
+        // Prune unused rooms
         var toRemove = rooms.Where(r => !visited.Contains(r.id)).ToList();
-        foreach (var n in toRemove) { rooms.Remove(n); Destroy(n.transform.gameObject); }
-        // prune doors
+        foreach (var r in toRemove)
+        {
+            rooms.Remove(r);
+            Destroy(r.transform.gameObject);
+        }
+
+        // Prune unused doors
         for (int i = doors.Count - 1; i >= 0; i--)
         {
             var pair = doorConnections[i];
-            if (!connections.Contains(pair))
+            if (!connections.Contains(pair) && !connections.Contains((pair.Item2, pair.Item1)))
             {
                 Destroy(doors[i]);
                 doors.RemoveAt(i);
@@ -269,6 +293,7 @@ public class DungeonAlgorithm2 : MonoBehaviour
 
         onDungeonBuilt.Invoke();
     }
+
 
     private void OnDrawGizmos()
     {
