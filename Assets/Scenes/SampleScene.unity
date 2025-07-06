@@ -473,6 +473,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dungeonAlgorithm: {fileID: 521721229}
+  finishedTileMap: 
 --- !u!4 &889705106
 Transform:
   m_ObjectHideFlags: 0

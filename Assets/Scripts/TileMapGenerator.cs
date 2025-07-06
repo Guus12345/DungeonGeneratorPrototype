@@ -6,6 +6,7 @@ public class TileMapGenerator : MonoBehaviour
     [SerializeField] private DungeonAlgorithm2 dungeonAlgorithm;
     private int[,] tileMap;
     private int width, height;
+    public string finishedTileMap;
 
     void Start()
     {
@@ -14,7 +15,6 @@ public class TileMapGenerator : MonoBehaviour
         height = bounds.z + 1;
 
         tileMap = new int[width, height];
-        Debug.Log(TileMapToString());
     }
 
     public void GenerateTileMap()
@@ -90,6 +90,7 @@ public class TileMapGenerator : MonoBehaviour
         }
 
         Debug.Log(TileMapToString());
+        finishedTileMap = TileMapToString();
     }
 
     private bool InBounds(int x, int z) =>
@@ -104,7 +105,7 @@ public class TileMapGenerator : MonoBehaviour
             {
                 char c = tileMap[x, z] switch
                 {
-                    0 => ' ',
+                    0 => ' ',  // empty
                     1 => '#',  // wall or overlap
                     2 => 'D',  // door
                     3 => '.',  // floor
