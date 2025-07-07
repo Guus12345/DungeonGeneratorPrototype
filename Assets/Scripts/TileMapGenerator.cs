@@ -4,9 +4,10 @@ using UnityEngine;
 public class TileMapGenerator : MonoBehaviour
 {
     [SerializeField] private DungeonAlgorithm2 dungeonAlgorithm;
+    [SerializeField] private DungeonGenerator dungeonGenerator;
     private int[,] tileMap;
     private int width, height;
-    public string finishedTileMap;
+    public int[,] getTileMap;
 
     void Start()
     {
@@ -90,7 +91,8 @@ public class TileMapGenerator : MonoBehaviour
         }
 
         Debug.Log(TileMapToString());
-        finishedTileMap = TileMapToString();
+        getTileMap = tileMap;
+        dungeonGenerator.GenerateFromMap(getTileMap);
     }
 
     private bool InBounds(int x, int z) =>
@@ -107,7 +109,7 @@ public class TileMapGenerator : MonoBehaviour
                 {
                     0 => ' ',  // empty
                     1 => '#',  // wall or overlap
-                    2 => 'D',  // door
+                    2 => '.',  // door
                     3 => '.',  // floor
                     _ => '?'
                 };
