@@ -150,6 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   fillPrefab: {fileID: 3204687337251383887, guid: ee2ec93b0f8db314d99c5c4ca581bc18, type: 3}
   navMeshSurface: {fileID: 599334921}
+  dungeonALG: {fileID: 521721229}
 --- !u!4 &34207820
 Transform:
   m_ObjectHideFlags: 0
@@ -485,12 +486,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startingSize: {x: 50, y: 3, z: 50}
-  minRoomSizeLimit: 12
-  maxRoomSizeLimit: 12
+  maxRoomSizeLimit: 10
   useSeed: 0
   seed: 1833721687
   doorWidth: 2
-  branchChance: 0.175
+  branchChance: 0.75
   onDungeonBuilt:
     m_PersistentCalls:
       m_Calls:
@@ -506,6 +506,7 @@ MonoBehaviour:
           m_StringArgument: 'TileMapGenerator.GenerateTileMap() '
           m_BoolArgument: 0
         m_CallState: 2
+  randomRoom: {x: 0, y: 0}
 --- !u!114 &521721231
 MonoBehaviour:
   m_ObjectHideFlags: 0
