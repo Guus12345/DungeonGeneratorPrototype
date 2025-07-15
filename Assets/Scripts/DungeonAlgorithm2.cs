@@ -13,13 +13,13 @@ using UnityEngine.Events;
 public class DungeonAlgorithm2 : MonoBehaviour
 {
     public Vector3Int startingSize;
-    [SerializeField] private int minRoomSizeLimit = 12; // Minimum Room size limit
     [SerializeField] private int maxRoomSizeLimit = 12; // Maximum Room size limit
     [SerializeField] private bool useSeed; // bool for using seed or not
     [SerializeField] private int seed;
     [SerializeField] private int doorWidth = 2; // width of the door
     [SerializeField, Range(0f, 1f)] private float branchChance = 0.2f; // chance the connect and prune algorithm branches off into two
     [SerializeField] private UnityEvent onDungeonBuilt; // event for signalling next script activation
+    
 
     public class RoomNode // node for storing room information
     {
@@ -48,6 +48,7 @@ public class DungeonAlgorithm2 : MonoBehaviour
     public List<RoomNode> GetRooms() => rooms;
     public List<GameObject> GetDoors() => doors;
     public List<Vector3Int> GetDoorSizes() => doorSizes;
+    public Vector2Int randomRoom;
 
     private void Start()
     {
@@ -79,13 +80,9 @@ public class DungeonAlgorithm2 : MonoBehaviour
             unfinishedRooms.RemoveAt(unfinishedRooms.Count - 1);
             var pos = current.transform.position;
             var size = current.size;
-            int axis = random.Next(0, 2);
-            int limit = random.Next(minRoomSizeLimit, maxRoomSizeLimit);
 
-            bool splitX = (axis == 0 || size.z < limit) && size.x > limit;
-            bool splitZ = (axis == 1 || size.x < limit) && size.z > limit;
 
-            if (splitX)
+            if (size.x > maxRoomSizeLimit)
             {
                 int cut = random.Next(3, size.x - 3);
                 float xMin = pos.x - size.x / 2f;
@@ -99,7 +96,7 @@ public class DungeonAlgorithm2 : MonoBehaviour
                 unfinishedRooms.Add(nodeA);
                 unfinishedRooms.Add(nodeB);
             }
-            else if (splitZ)
+            else if (size.z > maxRoomSizeLimit)
             {
                 int cut = random.Next(3, size.z - 3);
                 float zMin = pos.z - size.z / 2f;
@@ -124,6 +121,8 @@ public class DungeonAlgorithm2 : MonoBehaviour
         unfinishedRooms.Clear();
         StartCoroutine(DoorGeneration());
     }
+
+    
 
 
     /// <summary>
@@ -258,7 +257,7 @@ public class DungeonAlgorithm2 : MonoBehaviour
             yield return new WaitForFixedUpdate();
         }
 
-        StartCoroutine(ConnectAndPrune());
+        StartCoroutine(PruneRooms());
     }
 
 
@@ -283,67 +282,141 @@ public class DungeonAlgorithm2 : MonoBehaviour
         return count;
     }
 
+    private IEnumerator PruneRooms()
+    {
+        // Compute area for each room
+        var roomAreas = rooms
+            .Select(r => new { Room = r, Area = r.size.x * r.size.z })
+            .OrderBy(x => x.Area)
+            .ToList();
+
+        // Determine how many to remove (10% of total, rounded down)
+        int removeCount = Mathf.FloorToInt(rooms.Count * 0.10f);
+
+        var toRemove = roomAreas.Take(removeCount).Select(x => x.Room).ToList();
+
+        // Remove rooms and destroy their GameObjects
+        foreach (var r in toRemove)
+        {
+            rooms.Remove(r);
+            Destroy(r.transform.gameObject);
+        }   
+
+        // Prune doors attached to removed rooms
+        for (int i = doors.Count - 1; i >= 0; i--)
+        {
+            var roomPair = doorConnections[i];
+            if (toRemove.Any(r => r.id == roomPair.a || r.id == roomPair.b))
+            {
+                Destroy(doors[i]);
+                doors.RemoveAt(i);
+                doorSizes.RemoveAt(i);
+                doorConnections.RemoveAt(i);
+                doorMap.Remove(roomPair);
+            }
+        }
+
+        yield return StartCoroutine(ConnectAndCheck());
+    }
+
+
+
 
     /// <summary>
     /// Coroutine that performs breadth-first traversal from one room,
     /// connecting reachable rooms and pruning isolated ones.
     /// Big O Notation: O(N + E), where N is room count and E is door count.
-    private IEnumerator ConnectAndPrune()
+    private IEnumerator ConnectAndCheck()
     {
-        // Assign door node IDs
-        int baseRoomCount = rooms.Count > 0 ? rooms.Max(r => r.id) + 1 : nextRoomId;
-        var doorNodeId = new Dictionary<(int, int), int>();
-        foreach (var roomPair in doorConnections) doorNodeId[roomPair] = baseRoomCount++;
-
         // Build room-to-door mapping
         var roomToDoors = new Dictionary<int, List<(int, int)>>();
         foreach (var roomPair in doorConnections)
         {
-            if (!roomToDoors.ContainsKey(roomPair.Item1)) roomToDoors[roomPair.Item1] = new List<(int, int)>();
-            if (!roomToDoors.ContainsKey(roomPair.Item2)) roomToDoors[roomPair.Item2] = new List<(int, int)>();
+            if (!roomToDoors.ContainsKey(roomPair.Item1))
+                roomToDoors[roomPair.Item1] = new List<(int, int)>();
+            if (!roomToDoors.ContainsKey(roomPair.Item2))
+                roomToDoors[roomPair.Item2] = new List<(int, int)>();
             roomToDoors[roomPair.Item1].Add(roomPair);
             roomToDoors[roomPair.Item2].Add(roomPair);
         }
 
         var visited = new HashSet<int>();
-        var queue = new Queue<int>();
-        int start = rooms.Last().id;
-        visited.Add(start);
-        queue.Enqueue(start);
+        bool isFirstRoom = true;
+        int roomCounts = 0;
 
-        while (queue.Count > 0)
+        while (visited.Count < rooms.Count)
         {
-            int current = queue.Dequeue();
+            roomCounts++;
 
-            if (!roomToDoors.ContainsKey(current)) continue;
+            // Pick any unvisited room as start
+            int startRoomId = rooms.First(r => !visited.Contains(r.id)).id;
 
-            var neighbors = roomToDoors[current];
-            neighbors.Shuffle(random);
+            var queue = new Queue<int>();
+            queue.Enqueue(startRoomId);
+            visited.Add(startRoomId);
 
-            bool guaranteedConnected = false;
-            foreach (var roomPair in neighbors)
+            while (queue.Count > 0)
             {
-                int neighbor = roomPair.Item1 == current ? roomPair.Item2 : roomPair.Item1;
-                if (visited.Contains(neighbor)) continue;
+                int current = queue.Dequeue();
 
-                if (!guaranteedConnected || random.NextDouble() < branchChance)
+                if (!roomToDoors.ContainsKey(current))
+                    continue;
+
+                var neighbors = roomToDoors[current];
+                neighbors.Shuffle(random);
+
+                bool guaranteedConnected = false;
+                foreach (var roomPair in neighbors)
                 {
-                    visited.Add(neighbor);
-                    queue.Enqueue(neighbor);
-                    connections.Add(roomPair);
-                    guaranteedConnected = true;
+                    int neighbor = roomPair.Item1 == current ? roomPair.Item2 : roomPair.Item1;
+                    if (visited.Contains(neighbor))
+                        continue;
+
+                    if (!guaranteedConnected || random.NextDouble() < branchChance)
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue(neighbor);
+                        connections.Add(roomPair);
+                        guaranteedConnected = true;
+                    }
+                }
+
+                yield return new WaitForFixedUpdate();
+            }
+
+            // If not first room, try to find first room
+            if (!isFirstRoom)
+            {
+                // Find any door between this room and previous room
+                var bridgingDoor = doorConnections.FirstOrDefault(pair =>
+                    (visited.Contains(pair.a) && !visited.Contains(pair.b)) ||
+                    (!visited.Contains(pair.a) && visited.Contains(pair.b)));
+
+                // If found, add it to connections
+                if (bridgingDoor != default)
+                {
+                    connections.Add(bridgingDoor);
+                    visited.Add(bridgingDoor.a);
+                    visited.Add(bridgingDoor.b);
+
+                    Debug.Log($"Bridging disconnected component with door between Room {bridgingDoor.a} and Room {bridgingDoor.b}.");
+                }
+                else
+                {
+                    Debug.LogWarning("Could not find a bridging door between disconnected components.");
                 }
             }
 
-            yield return new WaitForFixedUpdate();
+            isFirstRoom = false;
         }
 
-        // Prune unused rooms
-        var toRemove = rooms.Where(r => !visited.Contains(r.id)).ToList();
-        foreach (var r in toRemove)
+        if (roomCounts == 1)
         {
-            rooms.Remove(r);
-            Destroy(r.transform.gameObject);
+            Debug.Log("Dungeon connectivity: All rooms connected");
+        }
+        else
+        {
+            Debug.Log($"Dungeon connectivity: {roomCounts} disconnected, merged.");
         }
 
         // Prune unused doors
@@ -360,9 +433,13 @@ public class DungeonAlgorithm2 : MonoBehaviour
             }
         }
 
+        // Signal generation complete
         onDungeonBuilt.Invoke();
         generationFinished = true;
+        var randIndex = random.Next(rooms.Count);
+        randomRoom = new Vector2Int((int)rooms[randIndex].transform.position.x, (int)rooms[randIndex].transform.position.z);
     }
+
 
 
     /// <summary>

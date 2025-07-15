@@ -15,6 +15,9 @@ public class FloodFillAlgorithm : MonoBehaviour
     [Header("NavMesh Surface")]
     [SerializeField] private NavMeshSurface navMeshSurface; // Navmesh surface for generating navmesh for player
 
+    [Header("DungeonAlgorithm")]
+    [SerializeField] private DungeonAlgorithm2 dungeonALG;
+
     /// <summary>
     /// Starts the flood fill coroutine from the grid coordinates.
     public void StartFloodFill(int[,] grid, int startX, int startY)
@@ -50,7 +53,7 @@ public class FloodFillAlgorithm : MonoBehaviour
         Queue<Vector2Int> queue = new Queue<Vector2Int>();
         HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
 
-        Vector2Int start = new Vector2Int(x, y);
+        Vector2Int start = dungeonALG.randomRoom;
         queue.Enqueue(start);
         visited.Add(start);
 
